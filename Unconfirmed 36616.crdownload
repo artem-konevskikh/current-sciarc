@@ -1,0 +1,267 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Instant NGP\n",
+        "\n",
+        "made by [Atem Konevskikh](https://aiculedssul.net/)\n",
+        "\n",
+        "based on [official instant-ngp repsitory](https://github.com/NVlabs/instant-ngp) and [instant-ngp windows installation tutorial](https://github.com/bycloudai/instant-ngp-Windows)"
+      ],
+      "metadata": {
+        "id": "hMDOFzDNrddE"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "QJC-0GitoJEh",
+        "cellView": "form"
+      },
+      "outputs": [],
+      "source": [
+        "#@title GPU Check\n",
+        "#@markdown You can check which GPU you got. V100 is perfect, P100 and T4 is good, but if you got K80 its better to restart the notebook by selecting **Disconnect and delete runtime** in **Runtime** menu, because it is very slow\n",
+        "!nvidia-smi -L\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Install"
+      ],
+      "metadata": {
+        "id": "t5VPpbaswHRi"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "yKFsL8wSdQ8Q",
+        "cellView": "form"
+      },
+      "outputs": [],
+      "source": [
+        "#@title Install required tools\n",
+        "!apt update && apt install build-essential git python3-dev python3-pip libopenexr-dev libxi-dev libglfw3-dev libglew-dev libomp-dev libxinerama-dev libxcursor-dev\n",
+        "!pip install --upgrade cmake"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "ijgdl-TUcxnd",
+        "cellView": "form"
+      },
+      "outputs": [],
+      "source": [
+        "#@title Install Instant NGP\n",
+        "!git clone --recursive https://github.com/nvlabs/instant-ngp\n",
+        "%cd instant-ngp\n",
+        "!wget https://raw.githubusercontent.com/artem-konevskikh/current-sciarc/main/render.py -O /content/instant-ngp/scripts/render.py\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "B7E55zXYc1gD",
+        "cellView": "form"
+      },
+      "outputs": [],
+      "source": [
+        "#@title Build Instant NGP. Step 1\n",
+        "#%env TCNN_CUDA_ARCHITECTURES=75\n",
+        "!cmake . -B build -DNGP_BUILD_WITH_GUI=OFF -Wno-dev"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "cpuhlQmJcDPJ",
+        "cellView": "form"
+      },
+      "outputs": [],
+      "source": [
+        "#@title Build Instant NGP. Step 2\n",
+        "!cmake --build build --config RelWithDebInfo -j `nproc`"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#@title Install and load libraries\n",
+        "!pip3 install -r requirements.txt\n",
+        "!pip3 install plyfile\n",
+        "\n",
+        "import sys\n",
+        "pyngp_path = '/content/instant-ngp/build'\n",
+        "sys.path.append(pyngp_path)\n",
+        "import pyngp as ngp\n",
+        "import numpy as np\n",
+        "from plyfile import PlyData, PlyElement"
+      ],
+      "metadata": {
+        "cellView": "form",
+        "id": "5KVAKQVwKWnC"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#@title Mount Drive\n",
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ],
+      "metadata": {
+        "cellView": "form",
+        "id": "aqMtYJ6r5D9C"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Run Instant NGP"
+      ],
+      "metadata": {
+        "id": "JuahGjkZweV9"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#@title Run\n",
+        "#@markdown Scene folder\n",
+        "scene_path = '/content/drive/MyDrive/workshops/sciarc/nerf/test1' # @param {type:'string'}\n",
+        "#@markdown After the training snapshot and mesh will be saved to the scene folder.\n",
+        "# !cp -r $scene_path '/content/instant-ngp/data/nerf/.'\n",
+        "# scene_path = '/content/instant-ngp/data/nerf/test1'\n",
+        "#@markdown Snapshot file name\n",
+        "snapshot_path = \"base.msgpack\" # @param {type:'string'}\n",
+        "snapshot_path = f\"{scene_path}/{snapshot_path}\"\n",
+        "#@markdown Mesh file name\n",
+        "mesh_path = \"mesh.ply\" # @param {type:'string'}\n",
+        "mesh_path = f\"{scene_path}/{mesh_path}\"\n",
+        "#@markdown Number of steps to train for before quitting\n",
+        "n_steps = 50000 # @param {type:'integer'}\n",
+        "\n",
+        "!python3 ./scripts/run.py \\\n",
+        "         --mode nerf \\\n",
+        "         --scene $scene_path \\\n",
+        "         --save_snapshot $snapshot_path \\\n",
+        "         --save_mesh $mesh_path \\\n",
+        "         --train --n_steps $n_steps"
+      ],
+      "metadata": {
+        "id": "zUzJxc_cFnjg",
+        "cellView": "form"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#@title Export pointcloud\n",
+        "#@markdown Scene folder\n",
+        "scene_path = '/content/drive/MyDrive/workshops/sciarc/nerf/test1' # @param {type:'string'}\n",
+        "#@markdown Snapshot file to load\n",
+        "snapshot_path = \"base.msgpack\" # @param {type:'string'}\n",
+        "snapshot_path = f\"{scene_path}/{snapshot_path}\"\n",
+        "#@markdown Mesh file name\n",
+        "mesh_path = \"mesh5.ply\" # @param {type:'string'}\n",
+        "mesh_path = f\"{scene_path}/{mesh_path}\"\n",
+        "def round_up_to_base(x, base=10):\n",
+        "    return x + (base - x) % base\n",
+        "\n",
+        "def get_marching_cubes_res(res_1d: int, aabb:  ngp.BoundingBox ) -> np.ndarray:\n",
+        "\tscale = res_1d / (aabb.max - aabb.min).max()\n",
+        "\tres3d = (aabb.max - aabb.min) * scale + 0.5\n",
+        "\tres3d = round_up_to_base(res3d.astype(np.int32), 16)\n",
+        "\treturn res3d\n",
+        "\n",
+        "mode = ngp.TestbedMode.Nerf\n",
+        "testbed = ngp.Testbed(mode)\n",
+        "testbed.load_snapshot(snapshot_path)\n",
+        "mc = testbed.compute_marching_cubes_mesh(resolution=get_marching_cubes_res(512, testbed.aabb), aabb=testbed.aabb, thresh=2)\n",
+        "\n",
+        "vertex = np.array(list(zip(*mc[\"V\"].T)), dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])\n",
+        "vertex_color = np.array(list(zip(*((mc[\"C\"] * 255).T))), dtype=[('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])\n",
+        "\n",
+        "n = len(vertex)\n",
+        "assert len(vertex_color) == n\n",
+        "\n",
+        "vertex_all = np.empty(n, vertex.dtype.descr + vertex_color.dtype.descr)\n",
+        "\n",
+        "for prop in vertex.dtype.names:\n",
+        "    vertex_all[prop] = vertex[prop]\n",
+        "\n",
+        "for prop in vertex_color.dtype.names:\n",
+        "    vertex_all[prop] = vertex_color[prop]\n",
+        "\n",
+        "ply = PlyData([PlyElement.describe(vertex_all, 'vertex')], text=False)\n",
+        "\n",
+        "ply.write(mesh_path)"
+      ],
+      "metadata": {
+        "id": "UMSYqETGxTNS",
+        "cellView": "form"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#@title Render Video\n",
+        "#@markdown Scene folder\n",
+        "scene_path = '/content/drive/MyDrive/workshops/sciarc/nerf/test1' # @param {type:'string'}\n",
+        "#@markdown Output video file (should ends with `.mp4`)\n",
+        "output_video = '/content/drive/MyDrive/workshops/sciarc/nerf/test1/video.mp4' # @param {type:'string'}\n",
+        "#@markdown Resolution\n",
+        "width = 640 # @param {type:'integer'}\n",
+        "height = 360 # @param {type:'integer'}\n",
+        "#@markdown Duration\n",
+        "n_seconds = 30 # @param {type:'integer'}\n",
+        "#@markdown Frames per second\n",
+        "fps = 25 # @param {type:'integer'}\n",
+        "\n",
+        "\n",
+        "!python3 scripts/render.py --scene $scene_path --width=$width  --height=$height --n_seconds=$n_seconds --fps=$fps --render_name=$output_video\n"
+      ],
+      "metadata": {
+        "cellView": "form",
+        "id": "NDE0ATsj2I1F"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ],
+  "metadata": {
+    "colab": {
+      "collapsed_sections": [],
+      "name": "07-instant-ngp.ipynb",
+      "provenance": [],
+      "toc_visible": true
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
